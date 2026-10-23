@@ -2,31 +2,15 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parse } from "yaml";
 import { z } from "zod";
-import { Policy, Slug, UsdCents } from "@factory/contracts";
-
-/** USD per million tokens. */
-const ModelPrice = z.object({
-  input: z.number().nonnegative(),
-  output: z.number().nonnegative(),
-  cache_write_5m: z.number().nonnegative(),
-  cache_write_1h: z.number().nonnegative(),
-  cache_read: z.number().nonnegative(),
-});
-export type ModelPrice = z.infer<typeof ModelPrice>;
+import { Policy, RoleCatalog, Slug } from "@factory/contracts";
 
 /** Owner-edited factory configuration at `.factory/config.yaml`. */
 export const FactoryConfig = z.object({
   portfolio_id: Slug,
   policies: z.array(Policy).min(1),
   budgets: z.object({
-    /** Notional model spend across all factory sessions and subagents. */
-    portfolio_usd_cents: UsdCents,
-  }),
-  pricing: z.object({
-    as_of: z.string().min(1),
-    models: z.record(z.string(), ModelPrice),
-    /** Used for models missing from the table so spend is never silently zero. */
-    fallback: ModelPrice,
+    /** Tokens factory subagents may use in total (see `countedTokens`). */
+    portfolio_tokens: z.number().int().positive(),
   }),
 });
 export type FactoryConfig = z.infer<typeof FactoryConfig>;
@@ -39,6 +23,7 @@ export interface FactoryPaths {
   lock: string;
   usage: string;
   status: string;
+  catalog: string;
 }
 
 export function factoryPaths(projectDir: string): FactoryPaths {
@@ -52,6 +37,7 @@ export function factoryPaths(projectDir: string): FactoryPaths {
     lock: join(state, "server.lock"),
     usage: join(root, "usage"),
     status: join(root, "status.json"),
+    catalog: join(projectDir, "roles", "catalog.yaml"),
   };
 }
 
@@ -62,4 +48,9 @@ export function projectDir(): string {
 
 export function loadConfig(paths: FactoryPaths): FactoryConfig {
   return FactoryConfig.parse(parse(readFileSync(paths.config, "utf8")));
+}
+
+/** Every role id in the catalog; only these subagents count as factory work. */
+export function loadFactoryRoles(paths: FactoryPaths): Set<string> {
+  return new Set(RoleCatalog.parse(parse(readFileSync(paths.catalog, "utf8"))).roles.map((r) => r.role_id));
 }

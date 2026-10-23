@@ -14,9 +14,6 @@
     ],
     "SubagentStop": [
       { "hooks": [{ "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/packages/harness/dist/hook.js\" subagent-stop" }] }
-    ],
-    "Stop": [
-      { "hooks": [{ "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/packages/harness/dist/hook.js\" stop" }] }
     ]
   }
 }

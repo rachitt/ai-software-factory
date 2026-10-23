@@ -16,7 +16,7 @@ export interface StatusSnapshot {
   }>;
   attention: string[];
   usage: UsageTotals;
-  budget_usd_cents: number;
+  budget_tokens: number;
 }
 
 export function readStatus(path: string): StatusSnapshot | undefined {
@@ -27,12 +27,18 @@ export function readStatus(path: string): StatusSnapshot | undefined {
   }
 }
 
-const dollars = (cents: number) => `$${(cents / 100).toFixed(2)}`;
+export function formatTokens(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${Math.round(n / 1_000)}k`;
+  return String(n);
+}
 
 /** Compact, factual context injected at session start so work survives context resets. */
-export function renderStatus(s: StatusSnapshot | undefined, live: UsageTotals, budgetCents: number): string {
+export function renderStatus(s: StatusSnapshot | undefined, live: UsageTotals, budgetTokens: number): string {
   const lines = ["AI software factory status (from .factory/status.json):"];
-  lines.push(`Model spend: ${dollars(live.usd_cents)} of ${dollars(budgetCents)} portfolio budget (notional API-equivalent).`);
+  lines.push(
+    `Factory tokens: ${formatTokens(live.tokens)} of ${formatTokens(budgetTokens)} budget, across ${live.agents} factory subagents (cache reads excluded).`,
+  );
   if (!s) {
     lines.push("No factory state yet. Run /factory to see how to start, or /factory-discover <category> to begin research.");
     return lines.join("\n");

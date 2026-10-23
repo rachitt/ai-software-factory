@@ -43,7 +43,7 @@ export function registerTools(server: McpServer, factory: FactoryService): void 
   server.registerTool(
     "status",
     {
-      description: "Portfolio overview: every opportunity's workflow state, the suggested next step, items needing the owner, and model spend against budget.",
+      description: "Portfolio overview: every opportunity's workflow state, the suggested next step, items needing the owner, and factory token use against budget.",
       inputSchema: z.object({}),
       annotations: readOnly,
     },

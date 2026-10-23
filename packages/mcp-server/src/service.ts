@@ -11,7 +11,7 @@ import {
   type PolicyDecision,
 } from "@factory/contracts";
 import { WorkflowStore, type Db, type Queryable } from "@factory/control-plane";
-import { CONTROLLER_ROLE, type FactoryConfig, type StatusSnapshot, type UsageTotals } from "@factory/harness";
+import { CONTROLLER_ROLE, NO_USAGE, type FactoryConfig, type StatusSnapshot, type UsageTotals } from "@factory/harness";
 import { evaluate } from "@factory/policy";
 import { opportunityMachine, type OpportunityContext, type OpportunityState } from "@factory/workflow";
 import {
@@ -486,13 +486,13 @@ export class FactoryService {
         if (next.owner) attention.push(`${row.opportunity_id}: ${next.action}`);
       }
     }
-    const usage = this.opts.usage?.() ?? { usd_cents: 0, sessions: 0, agents: 0, by_agent_type: {} };
+    const usage = this.opts.usage?.() ?? NO_USAGE;
     return {
       generated_at: this.now(),
       opportunities,
       attention,
       usage,
-      budget_usd_cents: this.opts.config().budgets.portfolio_usd_cents,
+      budget_tokens: this.opts.config().budgets.portfolio_tokens,
       next_steps,
     };
   }

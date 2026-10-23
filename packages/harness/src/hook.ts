@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
- * Claude Code hook entry point: `node hook.js <pre-tool-use|session-start|subagent-stop|stop>`.
+ * Claude Code hook entry point: `node hook.js <pre-tool-use|session-start|subagent-stop>`.
  * Reads the hook payload from stdin and writes the hook response to stdout.
  */
-import { factoryPaths, loadConfig, projectDir } from "./config.js";
+import { factoryPaths, loadConfig, loadFactoryRoles, projectDir } from "./config.js";
 import { gate, type PreToolUseInput } from "./gate.js";
 import { readStatus, renderStatus } from "./status.js";
 import { recordUsage, usageTotals } from "./usage.js";
@@ -26,7 +26,7 @@ async function main(): Promise<void> {
   switch (event) {
     case "pre-tool-use": {
       try {
-        const decision = gate(input as PreToolUseInput, loadConfig(paths), usageTotals(paths.usage));
+        const decision = gate(input as PreToolUseInput, loadConfig(paths), usageTotals(paths.usage), loadFactoryRoles(paths));
         if (decision) {
           respond({
             hookSpecificOutput: {
@@ -53,20 +53,16 @@ async function main(): Promise<void> {
       respond({
         hookSpecificOutput: {
           hookEventName: "SessionStart",
-          additionalContext: renderStatus(readStatus(paths.status), usageTotals(paths.usage), config.budgets.portfolio_usd_cents),
+          additionalContext: renderStatus(readStatus(paths.status), usageTotals(paths.usage), config.budgets.portfolio_tokens),
         },
       });
       return;
     }
     case "subagent-stop": {
-      if (input.agent_transcript_path && input.agent_id) {
-        recordUsage(paths.usage, "agent", input.agent_id, input.agent_transcript_path, loadConfig(paths).pricing, input.agent_type);
-      }
-      return;
-    }
-    case "stop": {
-      if (input.transcript_path && input.session_id) {
-        recordUsage(paths.usage, "session", input.session_id, input.transcript_path, loadConfig(paths).pricing);
+      // Only factory roles count; other subagents in this project are not factory work.
+      const { agent_id, agent_type, agent_transcript_path } = input;
+      if (agent_id && agent_transcript_path && loadFactoryRoles(paths).has(agent_type)) {
+        recordUsage(paths.usage, agent_id, agent_type, agent_transcript_path);
       }
       return;
     }

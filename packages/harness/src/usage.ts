@@ -1,33 +1,35 @@
 import { readdirSync, readFileSync, writeFileSync, mkdirSync, renameSync } from "node:fs";
 import { join } from "node:path";
-import type { FactoryConfig, ModelPrice } from "./config.js";
 
 export interface TokenCounts {
   input: number;
   output: number;
-  cache_write_5m: number;
-  cache_write_1h: number;
+  cache_write: number;
   cache_read: number;
 }
 
+/**
+ * Tokens that count against the budget: everything the model processed fresh.
+ * Cache reads re-read the same context on every turn, so they would dwarf the
+ * real work; they are recorded but reported separately.
+ */
+export const countedTokens = (t: TokenCounts): number => t.input + t.output + t.cache_write;
+
 export interface UsageRecord {
-  kind: "session" | "agent";
-  id: string;
-  agent_type?: string;
+  agent_id: string;
+  agent_type: string;
   by_model: Record<string, TokenCounts>;
-  /** Notional API-equivalent cost; rounded up to whole cents. */
-  usd_cents: number;
-  pricing_as_of: string;
+  tokens: number;
+  cache_read_tokens: number;
 }
 
-const empty = (): TokenCounts => ({ input: 0, output: 0, cache_write_5m: 0, cache_write_1h: 0, cache_read: 0 });
+const empty = (): TokenCounts => ({ input: 0, output: 0, cache_write: 0, cache_read: 0 });
 
 interface TranscriptUsage {
   input_tokens?: number;
   output_tokens?: number;
   cache_read_input_tokens?: number;
   cache_creation_input_tokens?: number;
-  cache_creation?: { ephemeral_5m_input_tokens?: number; ephemeral_1h_input_tokens?: number };
 }
 
 /**
@@ -51,64 +53,47 @@ export function tokensFromTranscript(jsonl: string): Record<string, TokenCounts>
     seen.add(msg.id);
     const u = msg.usage;
     const t = (byModel[msg.model] ??= empty());
-    const write1h = u.cache_creation?.ephemeral_1h_input_tokens ?? 0;
-    const write5m = u.cache_creation?.ephemeral_5m_input_tokens ?? (u.cache_creation_input_tokens ?? 0) - write1h;
     t.input += u.input_tokens ?? 0;
     t.output += u.output_tokens ?? 0;
+    t.cache_write += u.cache_creation_input_tokens ?? 0;
     t.cache_read += u.cache_read_input_tokens ?? 0;
-    t.cache_write_5m += Math.max(0, write5m);
-    t.cache_write_1h += write1h;
   }
   return byModel;
 }
 
-export function costCents(byModel: Record<string, TokenCounts>, pricing: FactoryConfig["pricing"]): number {
-  let usd = 0;
-  for (const [model, t] of Object.entries(byModel)) {
-    const p: ModelPrice = pricing.models[model] ?? pricing.fallback;
-    usd +=
-      (t.input * p.input +
-        t.output * p.output +
-        t.cache_write_5m * p.cache_write_5m +
-        t.cache_write_1h * p.cache_write_1h +
-        t.cache_read * p.cache_read) /
-      1_000_000;
-  }
-  return Math.ceil(usd * 100);
-}
-
 /**
- * Writes one usage file per session or subagent. Rewriting the whole file
- * keeps this idempotent: re-running a hook on a longer transcript replaces the
+ * Writes one usage file per factory subagent. Rewriting the whole file keeps
+ * this idempotent: re-running the hook on a longer transcript replaces the
  * earlier total instead of double-counting it.
  */
-export function recordUsage(
-  usageDir: string,
-  kind: UsageRecord["kind"],
-  id: string,
-  transcriptPath: string,
-  pricing: FactoryConfig["pricing"],
-  agentType?: string,
-): UsageRecord {
+export function recordUsage(usageDir: string, agentId: string, agentType: string, transcriptPath: string): UsageRecord {
   const by_model = tokensFromTranscript(readFileSync(transcriptPath, "utf8"));
-  const record: UsageRecord = { kind, id, by_model, usd_cents: costCents(by_model, pricing), pricing_as_of: pricing.as_of };
-  if (agentType) record.agent_type = agentType;
+  const models = Object.values(by_model);
+  const record: UsageRecord = {
+    agent_id: agentId,
+    agent_type: agentType,
+    by_model,
+    tokens: models.reduce((n, t) => n + countedTokens(t), 0),
+    cache_read_tokens: models.reduce((n, t) => n + t.cache_read, 0),
+  };
   mkdirSync(usageDir, { recursive: true });
-  const file = join(usageDir, `${kind}-${id.replace(/[^A-Za-z0-9_-]/g, "_")}.json`);
+  const file = join(usageDir, `agent-${agentId.replace(/[^A-Za-z0-9_-]/g, "_")}.json`);
   writeFileSync(`${file}.tmp`, JSON.stringify(record, null, 2));
   renameSync(`${file}.tmp`, file);
   return record;
 }
 
 export interface UsageTotals {
-  usd_cents: number;
-  sessions: number;
+  tokens: number;
+  cache_read_tokens: number;
   agents: number;
   by_agent_type: Record<string, number>;
 }
 
+export const NO_USAGE: UsageTotals = { tokens: 0, cache_read_tokens: 0, agents: 0, by_agent_type: {} };
+
 export function usageTotals(usageDir: string): UsageTotals {
-  const totals: UsageTotals = { usd_cents: 0, sessions: 0, agents: 0, by_agent_type: {} };
+  const totals: UsageTotals = { ...NO_USAGE, by_agent_type: {} };
   let files: string[];
   try {
     files = readdirSync(usageDir).filter((f) => f.endsWith(".json"));
@@ -122,13 +107,11 @@ export function usageTotals(usageDir: string): UsageTotals {
     } catch {
       continue;
     }
-    totals.usd_cents += r.usd_cents;
-    if (r.kind === "session") totals.sessions++;
-    else {
-      totals.agents++;
-      const k = r.agent_type ?? "unknown";
-      totals.by_agent_type[k] = (totals.by_agent_type[k] ?? 0) + r.usd_cents;
-    }
+    if (typeof r.tokens !== "number") continue;
+    totals.tokens += r.tokens;
+    totals.cache_read_tokens += r.cache_read_tokens ?? 0;
+    totals.agents++;
+    totals.by_agent_type[r.agent_type] = (totals.by_agent_type[r.agent_type] ?? 0) + r.tokens;
   }
   return totals;
 }

@@ -1,6 +1,7 @@
 import type { ActionKind, ActionRequest, Environment, PolicyDecision } from "@factory/contracts";
 import { evaluate } from "@factory/policy";
 import type { FactoryConfig } from "./config.js";
+import { formatTokens } from "./status.js";
 import type { UsageTotals } from "./usage.js";
 
 /** The subset of Claude Code's PreToolUse hook input this gate reads. */
@@ -69,6 +70,14 @@ function gatedActions(input: PreToolUseInput): Gated[] {
   return [];
 }
 
+/** The token budget limits factory subagents and workflows, not other work in the project. */
+function startsFactoryWork(input: PreToolUseInput, factoryRoles: ReadonlySet<string>): boolean {
+  const { tool_name: tool, tool_input: args } = input;
+  if (tool === "Agent" || tool === "Task") return typeof args.subagent_type === "string" && factoryRoles.has(args.subagent_type);
+  if (tool === "Workflow") return typeof args.name === "string" && args.name.startsWith("factory-");
+  return false;
+}
+
 const SEVERITY: Record<PolicyDecision["effect"], number> = { allow: 0, escalate: 1, deny: 2 };
 
 /**
@@ -76,7 +85,12 @@ const SEVERITY: Record<PolicyDecision["effect"], number> = { allow: 0, escalate:
  * flow in charge, so factory policy can only restrict, never widen, what the
  * session is already allowed to do.
  */
-export function gate(input: PreToolUseInput, config: FactoryConfig, usage: UsageTotals): GateDecision | undefined {
+export function gate(
+  input: PreToolUseInput,
+  config: FactoryConfig,
+  usage: UsageTotals,
+  factoryRoles: ReadonlySet<string>,
+): GateDecision | undefined {
   const role = input.agent_type ?? CONTROLLER_ROLE;
 
   // Attribution: factory records name the role that produced them, and that
@@ -87,14 +101,15 @@ export function gate(input: PreToolUseInput, config: FactoryConfig, usage: Usage
     }
   }
 
-  const gated = gatedActions(input);
-  if (gated.some((g) => g.action === "spawn_worker") && usage.usd_cents >= config.budgets.portfolio_usd_cents) {
+  const budget = config.budgets.portfolio_tokens;
+  if (startsFactoryWork(input, factoryRoles) && usage.tokens >= budget) {
     return {
       permissionDecision: "deny",
-      reason: `portfolio budget exhausted: $${(usage.usd_cents / 100).toFixed(2)} of $${(config.budgets.portfolio_usd_cents / 100).toFixed(2)} spent; raise budgets.portfolio_usd_cents in .factory/config.yaml`,
+      reason: `factory token budget used up: ${formatTokens(usage.tokens)} of ${formatTokens(budget)}; raise budgets.portfolio_tokens in .factory/config.yaml`,
     };
   }
 
+  const gated = gatedActions(input);
   let worst: PolicyDecision | undefined;
   for (const g of gated) {
     const request: ActionRequest = {

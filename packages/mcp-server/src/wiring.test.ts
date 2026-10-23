@@ -59,7 +59,7 @@ describe("Claude Code wiring", () => {
     expect(existsSync(join(root, "packages/mcp-server/src/main.ts"))).toBe(true);
     const settings = JSON.parse(readFileSync(join(root, ".claude/settings.json"), "utf8"));
     const commands = JSON.stringify(settings.hooks);
-    for (const event of ["pre-tool-use", "session-start", "subagent-stop", "stop"]) {
+    for (const event of ["pre-tool-use", "session-start", "subagent-stop"]) {
       expect(commands).toContain(`packages/harness/dist/hook.js\\" ${event}`);
     }
   });

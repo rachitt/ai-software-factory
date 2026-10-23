@@ -22,7 +22,7 @@ Then, in Claude Code:
 | `/factory-discover learning 3` | Scouts 3 opportunities, records evidence from 3 angles each, writes briefs, has an independent skeptic review them, and designs experiments. Then it advances each opportunity as far as the evidence allows. |
 | `/factory` | Shows status, carries out routine next steps, and asks you for authorizations and build/investigate/reject decisions. |
 
-Set your budget and boundaries first in [.factory/config.yaml](.factory/config.yaml). The default portfolio budget is a $50 placeholder.
+Set your token budget and boundaries first in [.factory/config.yaml](.factory/config.yaml). The default budget of 5M tokens is a placeholder. The factory uses your Claude Code subscription; it never calls the API or spends money on models.
 
 ## How it fits together
 
@@ -34,7 +34,7 @@ you ──/factory, /factory-discover──▶ main session (controller)
                                         │  mcp__factory__* tools only
                                         ▼
        factory MCP server ── contracts + guards ── embedded Postgres (.factory/state)
-hooks: PreToolUse policy gate · SessionStart status · SubagentStop/Stop usage + cost
+hooks: PreToolUse policy gate · SessionStart status · SubagentStop token counting
 ```
 
 - **Policy** (`.factory/config.yaml`): `allow` defers to Claude Code permissions, `escalate` prompts you, and `deny` blocks. Build decisions, publishing, outreach, and production deploys escalate. Spending and payments are denied until you change the config.
@@ -49,7 +49,7 @@ hooks: PreToolUse policy gate · SessionStart status · SubagentStop/Stop usage 
 | `@factory/policy` | Deny-by-default policy evaluation and a hierarchical budget ledger |
 | `@factory/workflow` | Replay-safe opportunity/build/repair state machines with evidence guards, task graph, retry policy, release gate |
 | `@factory/control-plane` | PostgreSQL migrations and the workflow run store (idempotent, optimistic concurrency) |
-| `@factory/harness` | Config, the policy gate, usage/cost accounting, and the Claude Code hook entry point |
+| `@factory/harness` | Config, the policy gate, token accounting, and the Claude Code hook entry point |
 | `@factory/mcp-server` | The `factory` MCP server: the only way agents change factory state |
 
 ## Development

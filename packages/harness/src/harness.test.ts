@@ -4,10 +4,11 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   classifyBash,
-  costCents,
   factoryPaths,
-  gate,
+  gate as gateWith,
   loadConfig,
+  loadFactoryRoles,
+  NO_USAGE,
   recordUsage,
   renderStatus,
   tokensFromTranscript,
@@ -17,8 +18,11 @@ import {
 } from "./index.js";
 
 // The committed config is the real policy; test against it so edits that weaken it are noticed.
-const config = loadConfig(factoryPaths(new URL("../../..", import.meta.url).pathname));
-const noUsage: UsageTotals = { usd_cents: 0, sessions: 0, agents: 0, by_agent_type: {} };
+const paths = factoryPaths(new URL("../../..", import.meta.url).pathname);
+const config = loadConfig(paths);
+const roles = loadFactoryRoles(paths);
+const noUsage: UsageTotals = NO_USAGE;
+const gate = (input: PreToolUseInput, cfg: typeof config, usage: UsageTotals) => gateWith(input, cfg, usage, roles);
 
 const call = (tool_name: string, tool_input: Record<string, unknown>, agent_type?: string): PreToolUseInput => ({
   session_id: "s1",
@@ -61,11 +65,15 @@ describe("policy gate", () => {
     expect(gate(call("mcp__factory__review_submit", { actor_role: "demand-skeptic" }, "demand-skeptic"), config, noUsage)).toBeUndefined();
   });
 
-  it("refuses new workers once the portfolio budget is spent", () => {
-    const spent = { ...noUsage, usd_cents: config.budgets.portfolio_usd_cents };
-    expect(gate(call("Agent", { subagent_type: "demand-skeptic" }), config, spent)?.permissionDecision).toBe("deny");
-    expect(gate(call("Workflow", { name: "factory-discover" }), config, spent)?.permissionDecision).toBe("deny");
-    expect(gate(call("Agent", {}), config, noUsage)).toBeUndefined();
+  it("refuses new factory workers once the token budget is used, but not other subagents", () => {
+    const spent = { ...noUsage, tokens: config.budgets.portfolio_tokens };
+    expect(gate(call("Agent", { subagent_type: "demand-skeptic" }), config, spent)).toMatchObject({
+      permissionDecision: "deny",
+      reason: expect.stringMatching(/token budget used up: 5\.0M of 5\.0M/),
+    });
+    expect(gate(call("Workflow", { name: "factory-discovery-pipeline" }), config, spent)?.permissionDecision).toBe("deny");
+    expect(gate(call("Agent", { subagent_type: "Explore" }), config, spent)).toBeUndefined();
+    expect(gate(call("Agent", { subagent_type: "demand-skeptic" }), config, noUsage)).toBeUndefined();
   });
 
   it("classifies risky shell commands", () => {
@@ -91,45 +99,44 @@ describe("usage accounting", () => {
     JSON.stringify({ type: "user", message: { content: "hi" } }),
   ].join("\n");
 
-  it("dedupes split messages and separates cache writes", () => {
+  it("dedupes split messages and separates cache reads", () => {
     expect(tokensFromTranscript(transcript)).toEqual({
-      "claude-opus-5-5": { input: 1_000_000, output: 100_000, cache_read: 0, cache_write_5m: 0, cache_write_1h: 0 },
-      "claude-haiku-5-5": { input: 0, output: 0, cache_read: 2_000_000, cache_write_5m: 600_000, cache_write_1h: 400_000 },
+      "claude-opus-5-5": { input: 1_000_000, output: 100_000, cache_read: 0, cache_write: 0 },
+      "claude-haiku-5-5": { input: 0, output: 0, cache_read: 2_000_000, cache_write: 1_000_000 },
     });
   });
 
-  it("prices usage and prices unknown models at the fallback tier", () => {
-    // Opus: $4 + $2 = $6.00. Haiku: 0.02 + 0.075 + 0.08 = $0.175 → total 617.5 → 618 cents
-    expect(costCents(tokensFromTranscript(transcript), config.pricing)).toBe(618);
-    expect(costCents({ "mystery-model": { input: 1_000_000, output: 0, cache_read: 0, cache_write_5m: 0, cache_write_1h: 0 } }, config.pricing)).toBe(1000);
-  });
-
-  it("records idempotently per session or agent and totals by role", () => {
+  it("records idempotently per subagent and totals by role", () => {
     const dir = mkdtempSync(join(tmpdir(), "factory-usage-"));
     const t = join(dir, "t.jsonl");
     writeFileSync(t, transcript);
-    recordUsage(join(dir, "usage"), "agent", "a1", t, config.pricing, "demand-skeptic");
-    recordUsage(join(dir, "usage"), "agent", "a1", t, config.pricing, "demand-skeptic");
-    recordUsage(join(dir, "usage"), "session", "s1", t, config.pricing);
-    expect(usageTotals(join(dir, "usage"))).toEqual({ usd_cents: 1236, sessions: 1, agents: 1, by_agent_type: { "demand-skeptic": 618 } });
-    expect(usageTotals(join(dir, "missing")).usd_cents).toBe(0);
+    recordUsage(join(dir, "usage"), "a1", "demand-skeptic", t);
+    recordUsage(join(dir, "usage"), "a1", "demand-skeptic", t);
+    recordUsage(join(dir, "usage"), "a2", "problem-evidence-analyst", t);
+    expect(usageTotals(join(dir, "usage"))).toEqual({
+      tokens: 4_200_000,
+      cache_read_tokens: 4_000_000,
+      agents: 2,
+      by_agent_type: { "demand-skeptic": 2_100_000, "problem-evidence-analyst": 2_100_000 },
+    });
+    expect(usageTotals(join(dir, "missing")).tokens).toBe(0);
   });
 });
 
 describe("status rendering", () => {
-  it("states budget and what needs attention", () => {
+  it("states token use and what needs attention", () => {
     const text = renderStatus(
       {
         generated_at: "2026-10-23T12:00:00Z",
         opportunities: [{ opportunity_id: "travel-vocab", category: "learning", state: "needs_input", resume_to: "experiment_ready", evidence_count: 12 }],
         attention: ["travel-vocab: decide whether to build"],
         usage: noUsage,
-        budget_usd_cents: 5000,
+        budget_tokens: 5_000_000,
       },
-      { ...noUsage, usd_cents: 1234 },
-      5000,
+      { ...noUsage, tokens: 1_234_567, agents: 7 },
+      5_000_000,
     );
-    expect(text).toContain("Model spend: $12.34 of $50.00");
+    expect(text).toContain("Factory tokens: 1.2M of 5.0M budget, across 7 factory subagents");
     expect(text).toContain("- travel-vocab [learning]: needs_input (resumes to experiment_ready); 12 evidence");
     expect(text).toContain("- travel-vocab: decide whether to build");
   });

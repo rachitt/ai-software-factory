@@ -29,4 +29,4 @@ Never record a decision or authorization the owner did not give. A permission pr
 
 ## Finish
 
-Summarize what changed, what is waiting on the owner, and spend against budget. To research a new category: `/factory-discover <category>`.
+Summarize what changed, what is waiting on the owner, and factory token use against budget. To research a new category: `/factory-discover <category>`.
