@@ -5,3 +5,8 @@ dist/
 .env.*
 coverage/
 .DS_Store
+# Factory runtime state (config.yaml is committed)
+.factory/state/
+.factory/usage/
+.factory/status.json
+.claude/settings.local.json

@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": ["mcp__factory__*", "WebSearch", "WebFetch"]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "^(Agent|Task|Workflow|WebSearch|WebFetch|Bash)$|^mcp__factory__",
+        "hooks": [{ "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/packages/harness/dist/hook.js\" pre-tool-use" }]
+      }
+    ],
+    "SessionStart": [
+      { "hooks": [{ "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/packages/harness/dist/hook.js\" session-start" }] }
+    ],
+    "SubagentStop": [
+      { "hooks": [{ "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/packages/harness/dist/hook.js\" subagent-stop" }] }
+    ],
+    "Stop": [
+      { "hooks": [{ "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/packages/harness/dist/hook.js\" stop" }] }
+    ]
+  }
+}

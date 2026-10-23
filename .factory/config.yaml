@@ -1,0 +1,45 @@
+# Factory operating boundaries (idea.md "Meaning of autopilot").
+# Owner-edited. Agents cannot change this file's effect: hooks read it on every
+# gated tool call. "allow" defers to Claude Code's normal permissions; "escalate"
+# becomes a permission prompt for the owner; "deny" blocks the call.
+portfolio_id: default
+
+budgets:
+  # Notional model spend (API-equivalent) across factory sessions and subagents.
+  # New subagents and workflows are refused once this is reached.
+  # PLACEHOLDER: set this to your research budget.
+  portfolio_usd_cents: 5000
+
+policies:
+  - policy_id: portfolio-default
+    version: 1
+    scope: { level: portfolio }
+    rules:
+      - { rule_id: research-reads, action: external_read, effect: allow, exception_owner: owner }
+      - { rule_id: model-calls, action: model_call, effect: allow, exception_owner: owner }
+      - { rule_id: workers, action: spawn_worker, effect: allow, exception_owner: owner }
+      - { rule_id: local-exec, action: sandbox_exec, effect: allow, environments: [sandbox], exception_owner: owner }
+      - { rule_id: build-approval, action: approve_investment, effect: escalate, exception_owner: owner,
+          note: "Every build decision needs the owner." }
+      - { rule_id: publishing, action: publish_content, effect: escalate, exception_owner: owner }
+      - { rule_id: outreach, action: send_communication, effect: escalate, exception_owner: owner }
+      - { rule_id: preview-deploys, action: deploy, effect: allow, environments: [preview], exception_owner: owner }
+      - { rule_id: production-deploys, action: deploy, effect: escalate, environments: [staging, production], exception_owner: owner }
+      - { rule_id: infrastructure, action: create_infrastructure, effect: escalate, exception_owner: owner }
+      - { rule_id: no-spend-yet, action: spend_money, effect: deny, exception_owner: owner,
+          note: "No paid campaigns until an experiment budget is approved." }
+      - { rule_id: no-payments-yet, action: accept_payment, effect: deny, exception_owner: owner }
+      - { rule_id: no-production-data, action: modify_production_data, effect: deny, exception_owner: owner }
+
+pricing:
+  # USD per million tokens. Input/output/cache-read from Anthropic's published
+  # rates (cached 2026-10-06). Cache writes assume the standard 1.25x (5m) and
+  # 2x (1h) input multipliers. Haiku rates are the <=100K-prompt tier.
+  as_of: "2026-10-06"
+  models:
+    claude-fable-5-1:  { input: 10.00, output: 50.00, cache_write_5m: 12.50, cache_write_1h: 20.00, cache_read: 0.25 }
+    claude-opus-5-5:   { input: 4.00,  output: 20.00, cache_write_5m: 5.00,  cache_write_1h: 8.00,  cache_read: 0.20 }
+    claude-sonnet-5-5: { input: 2.00,  output: 10.00, cache_write_5m: 2.50,  cache_write_1h: 4.00,  cache_read: 0.20 }
+    claude-haiku-5-5:  { input: 0.10,  output: 0.50,  cache_write_5m: 0.125, cache_write_1h: 0.20,  cache_read: 0.01 }
+  # Unknown models are priced at the most expensive tier so spend is never understated.
+  fallback: { input: 10.00, output: 50.00, cache_write_5m: 12.50, cache_write_1h: 20.00, cache_read: 0.25 }

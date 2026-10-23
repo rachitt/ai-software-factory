@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "factory": {
+      "command": "node",
+      "args": ["${CLAUDE_PROJECT_DIR:-.}/packages/mcp-server/dist/main.js"]
+    }
+  }
+}

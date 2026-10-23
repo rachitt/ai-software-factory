@@ -14,6 +14,7 @@ export const ActionKind = z.enum([
   "create_infrastructure",
   "deploy",
   "modify_production_data",
+  "approve_investment",
 ]);
 export type ActionKind = z.infer<typeof ActionKind>;
 

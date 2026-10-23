@@ -1,0 +1,29 @@
+{
+  "name": "@factory/mcp-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "bin": {
+    "factory-mcp": "./dist/main.js"
+  },
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "^0.5.11",
+    "@factory/contracts": "workspace:*",
+    "@factory/control-plane": "workspace:*",
+    "@factory/harness": "workspace:*",
+    "@factory/policy": "workspace:*",
+    "@factory/workflow": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "yaml": "^2.9.1",
+    "zod": "^4.6.7"
+  }
+}

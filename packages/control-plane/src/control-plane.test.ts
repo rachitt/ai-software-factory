@@ -24,7 +24,7 @@ describe("migrations", () => {
   it("applies once and is idempotent", async () => {
     expect(await migrate(db)).toEqual([]);
     const { rows } = await db.query<{ name: string }>("SELECT name FROM schema_migrations");
-    expect(rows.map((r) => r.name)).toEqual(["0001_init.sql"]);
+    expect(rows.map((r) => r.name)).toEqual(["0001_init.sql", "0002_attribution_and_authorizations.sql"]);
   });
 
   it("makes versioned records immutable", async () => {
