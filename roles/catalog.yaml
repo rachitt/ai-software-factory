@@ -1,0 +1,121 @@
+# Role catalog (architecture.md §2). Roles are reusable configurations, not
+# standing workers: the controller instantiates them when tasks are ready.
+# `active` marks the small subset used for implementation steps 2–4.
+# `independent` roles must never verify or review work they produced.
+catalog_version: 1
+roles:
+  # Product coordination
+  - { role_id: portfolio-planner, team: product_coordination, title: Portfolio planner, active: false,
+      purpose: Rank opportunities and products for investment within portfolio budgets,
+      primary_outputs: [investment priorities, portfolio plan] }
+  - { role_id: specification-owner, team: product_coordination, title: Product specification owner, active: true,
+      purpose: Own the versioned product contract, requirement ids, and acceptance criteria; resolve product ambiguity,
+      primary_outputs: [product specification, acceptance criteria, impact analysis] }
+  - { role_id: system-architect, team: product_coordination, title: System architect, active: true,
+      purpose: Design product architecture, interface contracts, and task dependency graphs; resolve technical disagreements,
+      primary_outputs: [architecture decisions, interface contracts, task graph] }
+
+  # Discovery
+  - { role_id: demand-intelligence-lead, team: discovery, title: Demand intelligence lead, active: true,
+      purpose: Lead opportunity discovery, delegate narrow searches, and assemble evidence-backed opportunity briefs,
+      primary_outputs: [opportunity brief, research plan] }
+  - { role_id: audience-researcher, team: discovery, title: Audience researcher, active: false,
+      purpose: Characterize the audience, triggering situations, and where they gather,
+      primary_outputs: [audience evidence, acquisition route candidates] }
+  - { role_id: competitor-pricing-researcher, team: discovery, title: Competitor and pricing researcher, active: false,
+      purpose: Map competitors, substitutes, pricing, existing spending, and switching reasons,
+      primary_outputs: [competitor evidence, pricing evidence] }
+  - { role_id: problem-evidence-analyst, team: discovery, title: Problem evidence analyst, active: true,
+      purpose: Collect, deduplicate, and cluster problem evidence with provenance and limitations,
+      primary_outputs: [evidence records, duplicate clusters] }
+  - { role_id: experiment-designer, team: discovery, title: Experiment designer and analyst, active: true,
+      purpose: Design experiments that resolve the largest uncertainty and assess results against predeclared criteria,
+      primary_outputs: [experiment definition, experiment result] }
+  - { role_id: demand-skeptic, team: discovery, title: Independent demand skeptic, active: true, independent: true,
+      purpose: Search for reasons an opportunity will fail and test the brief's assumptions with its own research,
+      primary_outputs: [skeptic review] }
+
+  # Experience
+  - { role_id: journey-designer, team: experience, title: Journey designer, active: true,
+      purpose: Design navigation and the complete journey from arrival through onboarding, first value, payment, and return,
+      primary_outputs: [journey map, navigation design] }
+  - { role_id: visual-designer, team: experience, title: Visual designer, active: false,
+      purpose: Produce screen designs using design-system tokens and components,
+      primary_outputs: [screen designs] }
+  - { role_id: interaction-designer, team: experience, title: Interaction designer, active: false,
+      purpose: Specify interaction rules and loading, empty, error, success, and recovery states,
+      primary_outputs: [interaction specification, screen states] }
+  - { role_id: content-designer, team: experience, title: Content designer, active: false,
+      purpose: Write realistic interface content, onboarding copy, and messages,
+      primary_outputs: [interface content] }
+  - { role_id: accessibility-reviewer, team: experience, title: Accessibility reviewer, active: false, independent: true,
+      purpose: Review designs and builds for accessible controls, contrast, and assistive technology support,
+      primary_outputs: [accessibility findings] }
+
+  # Engineering
+  - { role_id: frontend-builder, team: engineering, title: Frontend builder, active: true,
+      purpose: Implement interfaces and client behavior within allowed paths,
+      primary_outputs: [implementation commit, implementation evidence] }
+  - { role_id: backend-builder, team: engineering, title: Backend builder, active: true,
+      purpose: Implement server logic, APIs, and server-side access control,
+      primary_outputs: [implementation commit, implementation evidence] }
+  - { role_id: data-engineer, team: engineering, title: Data engineer, active: false,
+      purpose: Design schemas, backward-compatible migrations, and data access policies,
+      primary_outputs: [migrations, data model] }
+  - { role_id: integration-engineer, team: engineering, title: Integration engineer, active: false,
+      purpose: Integrate identity, payments, messaging, and other external services idempotently,
+      primary_outputs: [integration commit, webhook handling] }
+  - { role_id: platform-engineer, team: engineering, title: Platform engineer, active: false,
+      purpose: Maintain platform adapters, build pipelines, and execution environments,
+      primary_outputs: [platform adapter, build configuration] }
+
+  # Assurance
+  - { role_id: acceptance-tester, team: assurance, title: Acceptance tester, active: true, independent: true,
+      purpose: Verify acceptance criteria against the exact artifact with complete journey tests,
+      primary_outputs: [verification results, journey traces] }
+  - { role_id: security-reviewer, team: assurance, title: Security reviewer, active: false, independent: true,
+      purpose: Test access boundaries, abuse cases, secrets, and dependencies,
+      primary_outputs: [security findings] }
+  - { role_id: privacy-reviewer, team: assurance, title: Privacy reviewer, active: false, independent: true,
+      purpose: Verify data minimization, export, deletion, and scoped analytics,
+      primary_outputs: [privacy findings] }
+  - { role_id: performance-tester, team: assurance, title: Performance tester, active: false, independent: true,
+      purpose: Measure nonfunctional targets under realistic and degraded conditions,
+      primary_outputs: [performance results] }
+  - { role_id: adversarial-reviewer, team: assurance, title: Adversarial reviewer, active: false, independent: true,
+      purpose: Attempt to break the product and the evidence behind its release,
+      primary_outputs: [adversarial findings] }
+
+  # Growth
+  - { role_id: analytics-specialist, team: growth, title: Analytics specialist, active: false,
+      purpose: Define versioned event contracts and instrument activation and retention measures,
+      primary_outputs: [event contracts, instrumentation] }
+  - { role_id: onboarding-experimenter, team: growth, title: Onboarding experimenter, active: false,
+      purpose: Propose and analyze onboarding experiments from observed evidence,
+      primary_outputs: [experiment proposals, outcome analysis] }
+  - { role_id: retention-analyst, team: growth, title: Retention analyst, active: false,
+      purpose: Analyze cohorts and return behavior to find retention problems,
+      primary_outputs: [retention analysis] }
+  - { role_id: lifecycle-designer, team: growth, title: Lifecycle designer, active: false,
+      purpose: Design lifecycle messages and notifications that respect user preferences,
+      primary_outputs: [lifecycle plan, message templates] }
+  - { role_id: acquisition-creative, team: growth, title: Acquisition creative specialist, active: false,
+      purpose: Produce campaign assets for authorized acquisition channels,
+      primary_outputs: [campaign assets] }
+
+  # Operations
+  - { role_id: release-engineer, team: operations, title: Release engineer, active: true,
+      purpose: Assemble release manifests and promote verified artifacts according to policy,
+      primary_outputs: [release manifest, deployment] }
+  - { role_id: reliability-analyst, team: operations, title: Reliability analyst, active: false,
+      purpose: Watch telemetry, correlate failures with releases, and open incidents,
+      primary_outputs: [incident reports] }
+  - { role_id: incident-investigator, team: operations, title: Incident investigator, active: false,
+      purpose: Reproduce incidents with permitted data and diagnose root causes,
+      primary_outputs: [reproduction, diagnosis] }
+  - { role_id: repair-engineer, team: operations, title: Repair engineer, active: false,
+      purpose: Implement bounded repairs with regression tests,
+      primary_outputs: [repair commit, regression test] }
+  - { role_id: dependency-maintainer, team: operations, title: Dependency maintainer, active: false,
+      purpose: Keep dependencies and foundation modules current across the portfolio,
+      primary_outputs: [upgrade tasks, compatibility reports] }
